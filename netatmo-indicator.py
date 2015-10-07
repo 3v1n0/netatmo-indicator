@@ -21,8 +21,8 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
 
-from ConfigParser import ConfigParser
-from ConfigParser import Error as ConfigParserError
+from ConfigParser import ConfigParser, Error as ConfigParserError
+from datetime import datetime
 from gi.repository import AppIndicator3 as appindicator
 from gi.repository import Gtk, GLib
 from xdg.BaseDirectory import xdg_config_home
@@ -31,12 +31,12 @@ import inspect
 import netatmo_api_python.lnetatmo as lnetatmo
 import os
 import signal
-from datetime import datetime
+import traceback
 
 OWN_NAME = "netatmo-indicator"
-DEFAULT_UPDATE = 300;
 CLIENT_ID = "561467a749c75fa41c8b4569"
 CLIENT_SECRET = "9I859KYeqXdrwYT38hBxGiIMqh"
+DEFAULT_UPDATE = 300
 
 UNITS = {'Temperature': '°', 'Humidity': '%', 'CO2': ' ppm', 'Pressure': ' mbar',
          'AbsolutePressure': ' mbar', 'Noise': ' db', 'Rain': ' mm',
@@ -135,7 +135,11 @@ class NetatmoIndicator(object):
         GLib.timeout_add_seconds(DEFAULT_UPDATE, lambda: self.update_indicator() or True)
 
     def update_indicator(self):
-        self.update_modules()
+        try:
+            self.update_modules()
+        except:
+            print(traceback.format_exc())
+
         self.update_label()
         self.populate_menu()
 
@@ -176,8 +180,14 @@ class NetatmoIndicator(object):
             self.add_module_to_menu(module)
             self.menu.append(Gtk.SeparatorMenuItem.new())
 
+        if not len(self.menu.get_children()):
+            it = Gtk.MenuItem("Impossible to fetch data, check your connection or auth")
+            it.set_sensitive(False)
+            self.menu.append(it)
+            self.menu.append(Gtk.SeparatorMenuItem.new())
+
         it = Gtk.MenuItem("Open web dashboard")
-        it.connect("activate", lambda i: os.system("xdg-open https://my.netatmo.com"))
+        it.connect('activate', lambda i: os.system("xdg-open https://my.netatmo.com"))
         self.menu.append(it)
         self.menu.show_all()
 
