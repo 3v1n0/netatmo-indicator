@@ -25,6 +25,7 @@ from ConfigParser import ConfigParser, Error as ConfigParserError
 from datetime import datetime
 from gi.repository import AppIndicator3 as appindicator
 from gi.repository import Gtk, GLib
+from threading import Lock
 from xdg.BaseDirectory import xdg_config_home
 
 import inspect
@@ -54,21 +55,24 @@ class ConfigAuth(lnetatmo.ClientAuth, object):
         self._clientId = CLIENT_ID
         self._clientSecret = CLIENT_SECRET
 
+        self._config_lock = Lock()
         self.config_file = os.path.join(config_dir, '{}.conf'.format(OWN_NAME))
         self.config = ConfigParser()
         self.config.read(self.config_file)
 
         try:
-            self.label_device = self.config.get('interface', 'LABEL_DEVICE')
-            self.label_sensor = self.config.get('interface', 'LABEL_SENSOR')
+            with self._config_lock:
+                self.label_device = self.config.get('interface', 'LABEL_DEVICE')
+                self.label_sensor = self.config.get('interface', 'LABEL_SENSOR')
         except:
             self.label_device = ''
             self.label_sensor = ''
 
         try:
-            self._accessToken = self.config.get('auth', 'ACCESS_TOKEN')
-            self.refreshToken = self.config.get('auth', 'REFRESH_TOKEN')
-            self.expiration = int(self.config.get('auth', 'TOKEN_EXPIRATION'))
+            with self._config_lock:
+                self._accessToken = self.config.get('auth', 'ACCESS_TOKEN')
+                self.refreshToken = self.config.get('auth', 'REFRESH_TOKEN')
+                self.expiration = int(self.config.get('auth', 'TOKEN_EXPIRATION'))
             self.accessToken
         except:
             try:
@@ -86,23 +90,25 @@ class ConfigAuth(lnetatmo.ClientAuth, object):
         return token
 
     def update_auth_config(self):
-        if not self.config.has_section('auth'):
-            self.config.add_section('auth')
+        with self._config_lock:
+            if not self.config.has_section('auth'):
+                self.config.add_section('auth')
 
-        self.config.set('auth', 'ACCESS_TOKEN', self._accessToken)
-        self.config.set('auth', 'REFRESH_TOKEN', self.refreshToken)
-        self.config.set('auth', 'TOKEN_EXPIRATION', self.expiration)
-        with open(self.config_file, 'w') as f:
-            self.config.write(f)
+            self.config.set('auth', 'ACCESS_TOKEN', self._accessToken)
+            self.config.set('auth', 'REFRESH_TOKEN', self.refreshToken)
+            self.config.set('auth', 'TOKEN_EXPIRATION', self.expiration)
+            with open(self.config_file, 'w') as f:
+                self.config.write(f)
 
     def update_ui_config(self):
-        if not self.config.has_section('interface'):
-            self.config.add_section('interface')
+        with self._config_lock:
+            if not self.config.has_section('interface'):
+                self.config.add_section('interface')
 
-        self.config.set('interface', 'LABEL_DEVICE', self.label_device)
-        self.config.set('interface', 'LABEL_SENSOR', self.label_sensor)
-        with open(self.config_file, 'w') as f:
-            self.config.write(f)
+            self.config.set('interface', 'LABEL_DEVICE', self.label_device)
+            self.config.set('interface', 'LABEL_SENSOR', self.label_sensor)
+            with open(self.config_file, 'w') as f:
+                self.config.write(f)
 
     def request_credentials(self):
         dialog = Gtk.Dialog("Insert your Netatmo credentials", None, 0,
