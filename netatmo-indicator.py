@@ -24,7 +24,7 @@
 from ConfigParser import ConfigParser
 from ConfigParser import Error as ConfigParserError
 from gi.repository import AppIndicator3 as appindicator
-from gi.repository import Gtk
+from gi.repository import Gtk, GLib
 from xdg.BaseDirectory import xdg_config_home
 
 import inspect
@@ -34,6 +34,7 @@ import signal
 from datetime import datetime
 
 OWN_NAME = "netatmo-indicator"
+DEFAULT_UPDATE = 300;
 CLIENT_ID = "561467a749c75fa41c8b4569"
 CLIENT_SECRET = "9I859KYeqXdrwYT38hBxGiIMqh"
 
@@ -131,6 +132,7 @@ class NetatmoIndicator(object):
         self.ind = appindicator.Indicator.new(OWN_NAME, icon_path, appindicator.IndicatorCategory.APPLICATION_STATUS)
         self.ind.set_status(appindicator.IndicatorStatus.ACTIVE)
         self.update_indicator()
+        GLib.timeout_add_seconds(DEFAULT_UPDATE, lambda: self.update_indicator() or True)
 
     def update_indicator(self):
         self.update_modules()
