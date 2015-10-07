@@ -19,7 +19,10 @@
 # this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-class Module:
+import time
+
+class Module(object):
+
     class Type:
         MAIN = "NAMain"
         OUTDOOR = "NAModule1"
@@ -27,40 +30,164 @@ class Module:
         RAIN = "NAModule3"
         INDOOR = "NAModule4"
 
+    @staticmethod
+    def factory(data):
+        if data['type'] == Module.Type.MAIN:
+            return ControlUnit(data)
+        if data['type'] == Module.Type.OUTDOOR:
+            return Outdoor(data)
+        if data['type'] == Module.Type.WIND:
+            return Wind(data)
+        if data['type'] == Module.Type.RAIN:
+            return Outdoor(data)
+        if data['type'] == Module.Type.INDOOR:
+            return Indoor(data)
+
+        raise Exception("No valid type for data found")
+
+    def __init__(self, data):
+        self.__data = data
+
+    def __getitem__(self, value):
+        return self.__data[value]
+
+    @property
+    def id(self):
+        return self['_id']
+
+    @property
+    def type(self):
+        return self['type']
+
+    @property
+    def name(self):
+        return self['module_name']
+
+    @property
+    def dashboard(self):
+        return self['dashboard_data']
+
+    @property
+    def updated_time(self):
+        return self.dashboard['time_utc']
+
+    @property
+    def age(self):
+        return time.time() - self.updated_time
+
+    @property
+    def sensors(self):
+        return self['data_type']
+
+    def has_battery(self):
+        return False
+
+    def get_sensors_data(self):
+        return { s: self.dashboard[s] for s in self.sensors }
+
+
+class WirelessModule(Module):
+    def __signal_nearest_level(self):
+        return min(self._signal_levels(), key=lambda l:abs(l-self.signal_strength))
+
+    @property
+    def signal_level(self):
+        return self._signal_levels().index(self.__signal_nearest_level())
+
+
+class WifiModule(WirelessModule):
+    class Wifi:
+        MIN = 100
+        MAX = 60
+        LEVEL_0 = 90
+        LEVEL_1 = 80
+        LEVEL_2 = 70
+        LEVEL_3 = 60
+
+    def _signal_levels(self):
+        return [self.Wifi.LEVEL_0, self.Wifi.LEVEL_1, self.Wifi.LEVEL_2, self.Wifi.LEVEL_3]
+
+    @property
+    def signal_strength(self):
+        return self['wifi_status']
+
+    @property
+    def signal_percent(self):
+        return clamp(0, (self.Wifi.MIN - self.signal_strength) * 100.0 / (self.Wifi.MIN - self.Wifi.MAX), 100)
+
+
+class RadioModule(WirelessModule):
+    class Radio:
+        MIN = 90
+        MAX = 20
+        LEVEL_0 = 86
+        LEVEL_1 = 71
+        LEVEL_2 = 56
+        LEVEL_3 = 20
+
+    def has_battery(self):
+        return True
+
+    def _signal_levels(self):
+        return [self.Radio.LEVEL_0, self.Radio.LEVEL_1, self.Radio.LEVEL_2, self.Radio.LEVEL_3]
+
+    def __battery_levels(self):
+        return [self.Battery.LEVEL_0, self.Battery.LEVEL_1, self.Battery.LEVEL_2, self.Battery.LEVEL_3]
+
+    @property
+    def signal_strength(self):
+        return self['rf_status']
+
+    @property
+    def signal_percent(self):
+        return clamp(0, (self.Radio.MIN - self.signal_strength) * 100.0 / (self.Radio.MIN - self.Radio.MAX), 100)
+
+    @property
+    def battery_power(self):
+        return self['battery_vp']
+
+    @property
+    def battery_level(self):
+        return min(self.__battery_levels(), key=lambda x:abs(self.battery_power))
+
+    @property
+    def battery_percent(self):
+        return clamp(0, (self.battery_level - self.Battery.MIN) * 100.0 / (self.Battery.MAX - self.Battery.MIN), 100)
+
+
+class ControlUnit(WifiModule):
+    pass
+
+
+class Indoor(RadioModule):
     class Battery:
-        class Indoor:
-            MIN = 4200
-            MAX = 6000
-            LEVEL_0 = 5640
-            LEVEL_1 = 5280
-            LEVEL_2 = 4920
-            LEVEL_3 = 4560
+        MIN = 4200
+        MAX = 6000
+        LEVEL_0 = 5640
+        LEVEL_1 = 5280
+        LEVEL_2 = 4920
+        LEVEL_3 = 4560
 
-        class Outdoor:
-            MIN = 3600
-            MAX = 6000
-            LEVEL_0 = 5500
-            LEVEL_1 = 5000
-            LEVEL_2 = 4500
-            LEVEL_3 = 4000
 
-        class Wind:
-            MIN = 3950
-            MAX = 6000
-            LEVEL_0 = 5590
-            LEVEL_1 = 5180
-            LEVEL_2 = 4770
-            LEVEL_3 = 4360
+class Outdoor(RadioModule):
+    class Battery:
+        MIN = 3600
+        MAX = 6000
+        LEVEL_0 = 5500
+        LEVEL_1 = 5000
+        LEVEL_2 = 4500
+        LEVEL_3 = 4000
 
-    class Signal:
-        class Wifi:
-            LEVEL_0 = 90
-            LEVEL_1 = 80
-            LEVEL_2 = 70
-            LEVEL_3 = 60
 
-        class Radio:
-            LEVEL_0 = 86
-            LEVEL_1 = 71
-            LEVEL_2 = 56
-            LEVEL_3 = 20
+class Wind(RadioModule):
+    class Battery:
+        MIN = 3950
+        MAX = 6000
+        LEVEL_0 = 5590
+        LEVEL_1 = 5180
+        LEVEL_2 = 4770
+        LEVEL_3 = 4360
+
+
+def clamp(minvalue, value, maxvalue):
+    return max(minvalue, min(value, maxvalue))
