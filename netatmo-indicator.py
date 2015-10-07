@@ -59,6 +59,13 @@ class ConfigAuth(lnetatmo.ClientAuth, object):
         self.config.read(self.config_file)
 
         try:
+            self.label_device = self.config.get('interface', 'LABEL_DEVICE')
+            self.label_sensor = self.config.get('interface', 'LABEL_SENSOR')
+        except:
+            self.label_device = ''
+            self.label_sensor = ''
+
+        try:
             self._accessToken = self.config.get('auth', 'ACCESS_TOKEN')
             self.refreshToken = self.config.get('auth', 'REFRESH_TOKEN')
             self.expiration = int(self.config.get('auth', 'TOKEN_EXPIRATION'))
@@ -74,10 +81,7 @@ class ConfigAuth(lnetatmo.ClientAuth, object):
 
     @property
     def accessToken(self):
-        import time
-        print "expire:",self.expiration,time.time(),self.expiration-time.time()
         token = super(ConfigAuth, self).accessToken
-        print token,"expire:",self.expiration,"refresh",self.refreshToken
         self.update_auth_config()
         return token
 
@@ -88,6 +92,15 @@ class ConfigAuth(lnetatmo.ClientAuth, object):
         self.config.set('auth', 'ACCESS_TOKEN', self._accessToken)
         self.config.set('auth', 'REFRESH_TOKEN', self.refreshToken)
         self.config.set('auth', 'TOKEN_EXPIRATION', self.expiration)
+        with open(self.config_file, 'w') as f:
+            self.config.write(f)
+
+    def update_ui_config(self):
+        if not self.config.has_section('interface'):
+            self.config.add_section('interface')
+
+        self.config.set('interface', 'LABEL_DEVICE', self.label_device)
+        self.config.set('interface', 'LABEL_SENSOR', self.label_sensor)
         with open(self.config_file, 'w') as f:
             self.config.write(f)
 
@@ -129,8 +142,8 @@ class ConfigAuth(lnetatmo.ClientAuth, object):
 
 
 class NetatmoIndicator(object):
-    def __init__(self, auth):
-        self.auth = auth
+    def __init__(self, config_auth):
+        self.config_auth = config_auth
         pwd = os.path.realpath(os.path.abspath(os.path.split(inspect.getfile(inspect.currentframe()))[0]))
         icon_path = os.path.join(pwd, '{}.png'.format(OWN_NAME))
         self.ind = appindicator.Indicator.new(OWN_NAME, icon_path, appindicator.IndicatorCategory.APPLICATION_STATUS)
@@ -160,21 +173,30 @@ class NetatmoIndicator(object):
 
     def update_modules(self, max_age=3600):
         self.modules = []
-        devices = lnetatmo.DeviceList(self.auth)
+        devices = lnetatmo.DeviceList(self.config_auth)
         for name, station in devices.stations.items():
             self.add_module_if_valid(station, max_age)
             for m in station['modules']:
                 self.add_module_if_valid(devices.modules[m], max_age)
 
     def update_label(self):
-        # If configuration found...
         self.set_label('')
-        for module in self.modules:
-            if 'Temperature' in module['data_type']:
-                self.set_label("{}°".format(module['dashboard_data']['Temperature']))
+        try:
+            assert(len(self.config_auth.label_device))
+            assert(len(self.config_auth.label_sensor))
+            for module in self.modules:
+                if module['_id'] == self.config_auth.label_device:
+                    sensor = self.config_auth.label_sensor
+                    unit = UNITS[sensor] if sensor in UNITS.keys() else ''
+                    value = module['dashboard_data'][sensor]
+                    self.set_label("{}{}".format(value, unit))
+        except:
+            for module in self.modules:
+                if 'Temperature' in module['data_type']:
+                    self.set_label("{}°".format(module['dashboard_data']['Temperature']))
 
-            if module['type'] == 'NAModule1':
-                return
+                if module['type'] == 'NAModule1': #add enum-like
+                    break
 
     def populate_menu(self):
         self.menu = Gtk.Menu()
@@ -203,7 +225,15 @@ class NetatmoIndicator(object):
         for sensor, value in module['dashboard_data'].items():
             if sensor in module['data_type']:
                 unit = UNITS[sensor] if sensor in UNITS.keys() else ''
-                self.menu.append(Gtk.MenuItem("  {}: {}{}".format(sensor, value, unit)))
+                item = Gtk.MenuItem("  {}: {}{}".format(sensor, value, unit))
+                item.connect('activate', self.on_sensor_item_activated, module['_id'], sensor)
+                self.menu.append(item)
+
+    def on_sensor_item_activated(self, item, module_id, sensor):
+        self.config_auth.label_device = module_id
+        self.config_auth.label_sensor = sensor
+        self.config_auth.update_ui_config()
+        self.update_label()
 
 if __name__ == "__main__":
     ind = NetatmoIndicator(ConfigAuth())
