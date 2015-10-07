@@ -61,7 +61,7 @@ class ConfigAuth(lnetatmo.ClientAuth, object):
         try:
             self._accessToken = self.config.get('auth', 'ACCESS_TOKEN')
             self.refreshToken = self.config.get('auth', 'REFRESH_TOKEN')
-            self.expiration = self.config.get('auth', 'TOKEN_EXPIRATION')
+            self.expiration = int(self.config.get('auth', 'TOKEN_EXPIRATION'))
             self.accessToken
         except:
             try:
@@ -69,11 +69,15 @@ class ConfigAuth(lnetatmo.ClientAuth, object):
                 super(ConfigAuth, self).__init__(CLIENT_ID, CLIENT_SECRET, account, password)
                 self.update_auth_config()
             except:
+                print(traceback.format_exc())
                 raise Exception("Impossible to connect with provided credentials")
 
     @property
     def accessToken(self):
+        import time
+        print "expire:",self.expiration,time.time(),self.expiration-time.time()
         token = super(ConfigAuth, self).accessToken
+        print token,"expire:",self.expiration,"refresh",self.refreshToken
         self.update_auth_config()
         return token
 
