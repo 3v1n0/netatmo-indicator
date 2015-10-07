@@ -23,31 +23,37 @@
 
 from ConfigParser import ConfigParser
 from ConfigParser import Error as ConfigParserError
-from gi.repository import Gtk
 from gi.repository import AppIndicator3 as appindicator
+from gi.repository import Gtk
 from xdg.BaseDirectory import xdg_config_home
 
+import inspect
 import netatmo_api_python.lnetatmo as lnetatmo
 import os
 import signal
+from datetime import datetime
 
+OWN_NAME = "netatmo-indicator"
 CLIENT_ID = "561467a749c75fa41c8b4569"
 CLIENT_SECRET = "9I859KYeqXdrwYT38hBxGiIMqh"
+
+UNITS = {'Temperature': '°', 'Humidity': '%', 'CO2': ' ppm', 'Pressure': ' mbar',
+         'AbsolutePressure': ' mbar', 'Noise': ' db', 'Rain': ' mm',
+         'WindAngle': '°', 'WindStrength': 'km/h', 'GustAngle': '°', 'GustStrength': 'km/h' }
 
 # Workaround Ctrl+C not working with gio-gtk3
 signal.signal(signal.SIGINT, signal.SIG_DFL)
 
 class ConfigAuth(lnetatmo.ClientAuth, object):
     def __init__(self):
-        config_dir = os.path.join(xdg_config_home, "indicator-netatmo")
-        print config_dir
+        config_dir = os.path.join(xdg_config_home, OWN_NAME)
         if not os.path.isdir(config_dir):
             os.mkdir(config_dir)
 
         self._clientId = CLIENT_ID
         self._clientSecret = CLIENT_SECRET
 
-        self.config_file = os.path.join(config_dir, "indicator-netatmo.conf")
+        self.config_file = os.path.join(config_dir, '{}.conf'.format(OWN_NAME))
         self.config = ConfigParser()
         self.config.read(self.config_file)
 
@@ -68,11 +74,9 @@ class ConfigAuth(lnetatmo.ClientAuth, object):
     def accessToken(self):
         token = super(ConfigAuth, self).accessToken
         self.update_auth_config()
-        print("Get Token ",token)
         return token
 
     def update_auth_config(self):
-        print("Updating config ",self._accessToken)
         if not self.config.has_section('auth'):
             self.config.add_section('auth')
 
@@ -117,3 +121,70 @@ class ConfigAuth(lnetatmo.ClientAuth, object):
 
         dialog.destroy()
         return credentials
+
+
+class NetatmoIndicator(object):
+    def __init__(self, auth):
+        self.auth = auth
+        pwd = os.path.realpath(os.path.abspath(os.path.split(inspect.getfile(inspect.currentframe()))[0]))
+        icon_path = os.path.join(pwd, '{}.png'.format(OWN_NAME))
+        self.ind = appindicator.Indicator.new(OWN_NAME, icon_path, appindicator.IndicatorCategory.APPLICATION_STATUS)
+        self.ind.set_status(appindicator.IndicatorStatus.ACTIVE)
+
+        devices = lnetatmo.DeviceList(self.auth)
+        self.update_label(devices)
+        self.populate_menu(devices)
+
+    def set_label(self, label):
+        self.ind.set_label(str(label), "")
+
+    def update_label(self, devices):
+        # If configuration found...
+        for name, station in devices.stations.items():
+            for m in station['modules']:
+                module = devices.modules[m]
+                if module['type'] == 'NAModule1' and 'Temperature' in module['data_type']:
+                    self.set_label("{}°".format(module['dashboard_data']['Temperature']))
+                    return
+
+            if 'Temperature' in station['data_type']:
+                self.set_label("{}°".format(station['dashboard_data']['Temperature']))
+                return
+
+        self.set_label('')
+
+    def populate_menu(self, devices):
+        self.menu = Gtk.Menu()
+        self.ind.set_menu(self.menu)
+
+        for name, station in devices.stations.items():
+            self.add_module_to_menu(station)
+            for m in station['modules']:
+                self.add_module_to_menu(devices.modules[m])
+
+            self.menu.append(Gtk.SeparatorMenuItem.new())
+
+        it = Gtk.MenuItem("Open web dashboard")
+        it.connect("activate", lambda i: os.system("xdg-open https://my.netatmo.com"))
+        self.menu.append(it)
+
+        self.menu.show_all()
+
+    def add_module_to_menu(self, module, max_time=3600):
+        dashboard_data = module['dashboard_data']
+        utc_now = (datetime.utcnow() - datetime(1970, 1, 1)).total_seconds()
+        if utc_now - dashboard_data['time_utc'] > max_time:
+            return
+
+        it = Gtk.MenuItem(module['module_name'])
+        it.set_sensitive(False)
+        self.menu.append(it)
+
+        for sensor, value in dashboard_data.items():
+            if sensor in module['data_type']:
+                unit = UNITS[sensor] if sensor in UNITS.keys() else ''
+                self.menu.append(Gtk.MenuItem("  {}: {}{}".format(sensor, value, unit)))
+
+if __name__ == "__main__":
+    ind = NetatmoIndicator(ConfigAuth())
+    Gtk.main()
