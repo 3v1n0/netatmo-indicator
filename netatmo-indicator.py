@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# Copyright (C) 2014 Marco Trevisan
+# Copyright (C) 2015 Marco Trevisan
 #
 # CoPyCloud: a simple python wrapper to manage the Copy.com cloud
 #
