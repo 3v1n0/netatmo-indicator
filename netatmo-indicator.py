@@ -171,21 +171,18 @@ class NetatmoIndicator(object):
     def set_label(self, label):
         self.ind.set_label(str(label), "")
 
-    def module_age(self, module):
-        utc_now = (datetime.utcnow() - datetime(1970, 1, 1)).total_seconds()
-        return utc_now - module['dashboard_data']['time_utc']
+    def add_module_data_if_valid(self, module_data, max_age=3600):
+        module = Module.factory(module_data)
+        if module and module.age < max_age:
+             self.modules.append(module)
 
-    def add_module_if_valid(self, module, max_age):
-        if self.module_age(module) < max_age:
-            self.modules.append(module)
-
-    def update_modules(self, max_age=3600):
+    def update_modules(self):
         self.modules = []
         devices = lnetatmo.DeviceList(self.config_auth)
         for name, station in devices.stations.items():
-            self.add_module_if_valid(station, max_age)
+            self.add_module_data_if_valid(station)
             for m in station['modules']:
-                self.add_module_if_valid(devices.modules[m], max_age)
+                self.add_module_data_if_valid(devices.modules[m])
 
     def update_label(self):
         self.set_label('')
@@ -193,17 +190,17 @@ class NetatmoIndicator(object):
             assert(len(self.config_auth.label_device))
             assert(len(self.config_auth.label_sensor))
             for module in self.modules:
-                if module['_id'] == self.config_auth.label_device:
+                if module.id == self.config_auth.label_device:
                     sensor = self.config_auth.label_sensor
                     unit = UNITS[sensor] if sensor in UNITS.keys() else ''
-                    value = module['dashboard_data'][sensor]
+                    value = module.dashboard[sensor]
                     self.set_label("{}{}".format(value, unit))
         except:
             for module in self.modules:
-                if 'Temperature' in module['data_type']:
-                    self.set_label("{}°".format(module['dashboard_data']['Temperature']))
+                if 'Temperature' in module.sensors:
+                    self.set_label("{}°".format(module.dashboard['Temperature']))
 
-                if module['type'] == Module.Type.OUTDOOR:
+                if module.type == Module.Type.OUTDOOR:
                     break
 
     def populate_menu(self):
@@ -226,16 +223,15 @@ class NetatmoIndicator(object):
         self.menu.show_all()
 
     def add_module_to_menu(self, module, max_time=3600):
-        it = Gtk.MenuItem(module['module_name'])
+        it = Gtk.MenuItem(module.name)
         it.set_sensitive(False)
         self.menu.append(it)
 
-        for sensor, value in module['dashboard_data'].items():
-            if sensor in module['data_type']:
-                unit = UNITS[sensor] if sensor in UNITS.keys() else ''
-                item = Gtk.MenuItem("  {}: {}{}".format(sensor, value, unit))
-                item.connect('activate', self.on_sensor_item_activated, module['_id'], sensor)
-                self.menu.append(item)
+        for sensor, value in module.get_sensors_data().items():
+            unit = UNITS[sensor] if sensor in UNITS.keys() else ''
+            item = Gtk.MenuItem("  {}: {}{}".format(sensor, value, unit))
+            item.connect('activate', self.on_sensor_item_activated, module.id, sensor)
+            self.menu.append(item)
 
     def on_sensor_item_activated(self, item, module_id, sensor):
         self.config_auth.label_device = module_id
