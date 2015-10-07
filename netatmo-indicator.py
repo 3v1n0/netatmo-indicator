@@ -130,57 +130,61 @@ class NetatmoIndicator(object):
         icon_path = os.path.join(pwd, '{}.png'.format(OWN_NAME))
         self.ind = appindicator.Indicator.new(OWN_NAME, icon_path, appindicator.IndicatorCategory.APPLICATION_STATUS)
         self.ind.set_status(appindicator.IndicatorStatus.ACTIVE)
+        self.update_indicator()
 
-        devices = lnetatmo.DeviceList(self.auth)
-        self.update_label(devices)
-        self.populate_menu(devices)
+    def update_indicator(self):
+        self.update_modules()
+        self.update_label()
+        self.populate_menu()
 
     def set_label(self, label):
         self.ind.set_label(str(label), "")
 
-    def update_label(self, devices):
-        # If configuration found...
-        for name, station in devices.stations.items():
-            for m in station['modules']:
-                module = devices.modules[m]
-                if module['type'] == 'NAModule1' and 'Temperature' in module['data_type']:
-                    self.set_label("{}°".format(module['dashboard_data']['Temperature']))
-                    return
+    def module_age(self, module):
+        utc_now = (datetime.utcnow() - datetime(1970, 1, 1)).total_seconds()
+        return utc_now - module['dashboard_data']['time_utc']
 
-            if 'Temperature' in station['data_type']:
-                self.set_label("{}°".format(station['dashboard_data']['Temperature']))
+    def add_module_if_valid(self, module, max_age):
+        if self.module_age(module) < max_age:
+            self.modules.append(module)
+
+    def update_modules(self, max_age=3600):
+        self.modules = []
+        devices = lnetatmo.DeviceList(self.auth)
+        for name, station in devices.stations.items():
+            self.add_module_if_valid(station, max_age)
+            for m in station['modules']:
+                self.add_module_if_valid(devices.modules[m], max_age)
+
+    def update_label(self):
+        # If configuration found...
+        self.set_label('')
+        for module in self.modules:
+            if 'Temperature' in module['data_type']:
+                self.set_label("{}°".format(module['dashboard_data']['Temperature']))
+
+            if module['type'] == 'NAModule1':
                 return
 
-        self.set_label('')
-
-    def populate_menu(self, devices):
+    def populate_menu(self):
         self.menu = Gtk.Menu()
         self.ind.set_menu(self.menu)
 
-        for name, station in devices.stations.items():
-            self.add_module_to_menu(station)
-            for m in station['modules']:
-                self.add_module_to_menu(devices.modules[m])
-
+        for module in self.modules:
+            self.add_module_to_menu(module)
             self.menu.append(Gtk.SeparatorMenuItem.new())
 
         it = Gtk.MenuItem("Open web dashboard")
         it.connect("activate", lambda i: os.system("xdg-open https://my.netatmo.com"))
         self.menu.append(it)
-
         self.menu.show_all()
 
     def add_module_to_menu(self, module, max_time=3600):
-        dashboard_data = module['dashboard_data']
-        utc_now = (datetime.utcnow() - datetime(1970, 1, 1)).total_seconds()
-        if utc_now - dashboard_data['time_utc'] > max_time:
-            return
-
         it = Gtk.MenuItem(module['module_name'])
         it.set_sensitive(False)
         self.menu.append(it)
 
-        for sensor, value in dashboard_data.items():
+        for sensor, value in module['dashboard_data'].items():
             if sensor in module['data_type']:
                 unit = UNITS[sensor] if sensor in UNITS.keys() else ''
                 self.menu.append(Gtk.MenuItem("  {}: {}{}".format(sensor, value, unit)))
