@@ -25,6 +25,7 @@ from ConfigParser import ConfigParser, Error as ConfigParserError
 from datetime import datetime
 from gi.repository import AppIndicator3 as appindicator
 from gi.repository import Gtk, GLib
+from netatmo_modules import Module
 from threading import Lock
 from xdg.BaseDirectory import xdg_config_home
 
@@ -45,6 +46,7 @@ UNITS = {'Temperature': '°', 'Humidity': '%', 'CO2': ' ppm', 'Pressure': ' mbar
 
 # Workaround Ctrl+C not working with gio-gtk3
 signal.signal(signal.SIGINT, signal.SIG_DFL)
+
 
 class ConfigAuth(lnetatmo.ClientAuth, object):
     def __init__(self):
@@ -201,7 +203,7 @@ class NetatmoIndicator(object):
                 if 'Temperature' in module['data_type']:
                     self.set_label("{}°".format(module['dashboard_data']['Temperature']))
 
-                if module['type'] == 'NAModule1': #add enum-like
+                if module['type'] == Module.Type.OUTDOOR:
                     break
 
     def populate_menu(self):
