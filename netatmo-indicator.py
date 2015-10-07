@@ -62,19 +62,16 @@ class ConfigAuth(lnetatmo.ClientAuth, object):
         self.config = ConfigParser()
         self.config.read(self.config_file)
 
-        try:
-            with self._config_lock:
-                self.label_device = self.config.get('interface', 'LABEL_DEVICE')
-                self.label_sensor = self.config.get('interface', 'LABEL_SENSOR')
-        except:
-            self.label_device = ''
-            self.label_sensor = ''
+        self.label_device = self.config_get_optional('interface', 'LABEL_DEVICE', '')
+        self.label_sensor = self.config_get_optional('interface', 'LABEL_SENSOR', '')
+        self.show_battery = self.config_get_optional('interface', 'SHOW_BATTERY', True)
+        self.show_signal = self.config_get_optional('interface', 'SHOW_SIGNAL', True)
 
         try:
             with self._config_lock:
                 self._accessToken = self.config.get('auth', 'ACCESS_TOKEN')
                 self.refreshToken = self.config.get('auth', 'REFRESH_TOKEN')
-                self.expiration = int(self.config.get('auth', 'TOKEN_EXPIRATION'))
+                self.expiration = self.config.getint('auth', 'TOKEN_EXPIRATION')
             self.accessToken
         except:
             try:
@@ -90,6 +87,13 @@ class ConfigAuth(lnetatmo.ClientAuth, object):
         token = super(ConfigAuth, self).accessToken
         self.update_auth_config()
         return token
+
+    def config_get_optional(self, section, parameter, default=None):
+        try:
+            with self._config_lock:
+                return self.config.get(section, parameter)
+        except:
+            return default
 
     def update_auth_config(self):
         with self._config_lock:
@@ -109,6 +113,8 @@ class ConfigAuth(lnetatmo.ClientAuth, object):
 
             self.config.set('interface', 'LABEL_DEVICE', self.label_device)
             self.config.set('interface', 'LABEL_SENSOR', self.label_sensor)
+            self.config.set('interface', 'SHOW_BATTERY', self.show_battery)
+            self.config.set('interface', 'SHOW_SIGNAL', self.show_signal)
             with open(self.config_file, 'w') as f:
                 self.config.write(f)
 
@@ -231,6 +237,16 @@ class NetatmoIndicator(object):
             unit = UNITS[sensor] if sensor in UNITS.keys() else ''
             item = Gtk.MenuItem("  {}: {}{}".format(sensor, value, unit))
             item.connect('activate', self.on_sensor_item_activated, module.id, sensor)
+            self.menu.append(item)
+
+        if self.config_auth.show_signal:
+            item = Gtk.MenuItem("  Signal: {:.1f}%".format(module.signal_percent))
+            item.set_sensitive(False)
+            self.menu.append(item)
+
+        if self.config_auth.show_battery and module.has_battery():
+            item = Gtk.MenuItem("  Battery: {:.1f}%".format(module.battery_percent))
+            item.set_sensitive(False)
             self.menu.append(item)
 
     def on_sensor_item_activated(self, item, module_id, sensor):
