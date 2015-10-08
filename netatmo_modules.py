@@ -132,7 +132,10 @@ class RadioModule(WirelessModule):
         return [self.Radio.LEVEL_0, self.Radio.LEVEL_1, self.Radio.LEVEL_2, self.Radio.LEVEL_3]
 
     def __battery_levels(self):
-        return [self.Battery.LEVEL_0, self.Battery.LEVEL_1, self.Battery.LEVEL_2, self.Battery.LEVEL_3]
+        return [self.Battery.LEVEL_3, self.Battery.LEVEL_2, self.Battery.LEVEL_1, self.Battery.LEVEL_0]
+
+    def __battery_nearest_level(self):
+        return min(self.__battery_levels(), key=lambda l:abs(l-self.battery_power))
 
     @property
     def signal_strength(self):
@@ -148,11 +151,11 @@ class RadioModule(WirelessModule):
 
     @property
     def battery_level(self):
-        return min(self.__battery_levels(), key=lambda x:abs(self.battery_power))
+        return self.__battery_levels().index(self.__battery_nearest_level())
 
     @property
     def battery_percent(self):
-        return clamp(0, (self.battery_level - self.Battery.MIN) * 100.0 / (self.Battery.MAX - self.Battery.MIN), 100)
+        return clamp(0, (self.battery_power - self.Battery.MIN) * 100.0 / (self.Battery.MAX - self.Battery.MIN), 100)
 
 
 class ControlUnit(WifiModule):
