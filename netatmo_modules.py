@@ -94,11 +94,11 @@ class WirelessModule(Module):
         return [self.Signal.LEVEL_0, self.Signal.LEVEL_1, self.Signal.LEVEL_2, self.Signal.LEVEL_3]
 
     def __signal_nearest_level(self):
-        return min(self._signal_levels(), key=lambda l:abs(l-self.signal_strength))
+        return min(self.__signal_levels(), key=lambda l:abs(l-self.signal_strength))
 
     @property
     def signal_level(self):
-        return self._signal_levels().index(self.__signal_nearest_level())
+        return self.__signal_levels().index(self.__signal_nearest_level())
 
     @property
     def signal_percent(self):
