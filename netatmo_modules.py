@@ -51,9 +51,12 @@ class Module(object):
     def __getitem__(self, value):
         return self.__data[value]
 
+    def __getattr__(self, name):
+        return self[name]
+
     @property
     def id(self):
-        return self['_id']
+        return self._id
 
     @property
     def type(self):
@@ -61,11 +64,11 @@ class Module(object):
 
     @property
     def name(self):
-        return self['module_name']
+        return self.module_name
 
     @property
     def dashboard(self):
-        return self['dashboard_data']
+        return self.dashboard_data
 
     @property
     def updated_time(self):
@@ -77,7 +80,7 @@ class Module(object):
 
     @property
     def sensors(self):
-        return self['data_type']
+        return self.data_type
 
     def has_battery(self):
         return False
@@ -113,7 +116,7 @@ class WifiModule(WirelessModule):
 
     @property
     def signal_strength(self):
-        return self['wifi_status']
+        return self.wifi_status
 
 
 class RadioModule(WirelessModule):
@@ -136,11 +139,11 @@ class RadioModule(WirelessModule):
 
     @property
     def signal_strength(self):
-        return self['rf_status']
+        return self.rf_status
 
     @property
     def battery_power(self):
-        return self['battery_vp']
+        return self.battery_vp
 
     @property
     def battery_level(self):
