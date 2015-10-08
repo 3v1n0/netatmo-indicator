@@ -87,6 +87,9 @@ class Module(object):
 
 
 class WirelessModule(Module):
+    def __signal_levels(self):
+        return [self.Signal.LEVEL_0, self.Signal.LEVEL_1, self.Signal.LEVEL_2, self.Signal.LEVEL_3]
+
     def __signal_nearest_level(self):
         return min(self._signal_levels(), key=lambda l:abs(l-self.signal_strength))
 
@@ -94,9 +97,13 @@ class WirelessModule(Module):
     def signal_level(self):
         return self._signal_levels().index(self.__signal_nearest_level())
 
+    @property
+    def signal_percent(self):
+        return clamp(0, (self.Signal.MIN - self.signal_strength) * 100.0 / (self.Signal.MIN - self.Signal.MAX), 100)
+
 
 class WifiModule(WirelessModule):
-    class Wifi:
+    class Signal:
         MIN = 100
         MAX = 60
         LEVEL_0 = 90
@@ -104,20 +111,13 @@ class WifiModule(WirelessModule):
         LEVEL_2 = 70
         LEVEL_3 = 60
 
-    def _signal_levels(self):
-        return [self.Wifi.LEVEL_0, self.Wifi.LEVEL_1, self.Wifi.LEVEL_2, self.Wifi.LEVEL_3]
-
     @property
     def signal_strength(self):
         return self['wifi_status']
 
-    @property
-    def signal_percent(self):
-        return clamp(0, (self.Wifi.MIN - self.signal_strength) * 100.0 / (self.Wifi.MIN - self.Wifi.MAX), 100)
-
 
 class RadioModule(WirelessModule):
-    class Radio:
+    class Signal:
         MIN = 90
         MAX = 20
         LEVEL_0 = 86
@@ -128,9 +128,6 @@ class RadioModule(WirelessModule):
     def has_battery(self):
         return True
 
-    def _signal_levels(self):
-        return [self.Radio.LEVEL_0, self.Radio.LEVEL_1, self.Radio.LEVEL_2, self.Radio.LEVEL_3]
-
     def __battery_levels(self):
         return [self.Battery.LEVEL_3, self.Battery.LEVEL_2, self.Battery.LEVEL_1, self.Battery.LEVEL_0]
 
@@ -140,10 +137,6 @@ class RadioModule(WirelessModule):
     @property
     def signal_strength(self):
         return self['rf_status']
-
-    @property
-    def signal_percent(self):
-        return clamp(0, (self.Radio.MIN - self.signal_strength) * 100.0 / (self.Radio.MIN - self.Radio.MAX), 100)
 
     @property
     def battery_power(self):
