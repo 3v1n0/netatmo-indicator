@@ -243,12 +243,18 @@ class NetatmoIndicator(object):
             self.menu.append(item)
 
         if self.config_auth.show_signal:
-            item = Gtk.MenuItem("  Signal: {:.1f}%".format(module.signal_percent))
+            item = Gtk.ImageMenuItem.new_with_label("Signal: ~{:.1f}%".format(module.signal_percent))
+            icon_level = min(range(0, 101, 25), key=lambda l:abs(l-module.signal_percent))
+            item.set_image(Gtk.Image.new_from_icon_name('nm-signal-{}'.format(icon_level), Gtk.IconSize.MENU))
+            item.set_always_show_image(True)
             item.set_sensitive(False)
             self.menu.append(item)
 
         if self.config_auth.show_battery and module.has_battery():
-            item = Gtk.MenuItem("  Battery: {:.1f}%".format(module.battery_percent))
+            item = Gtk.ImageMenuItem.new_with_label("Battery: {:.1f}%".format(module.battery_percent))
+            icon_level = min(range(0, 101, 20), key=lambda l:abs(l-module.battery_percent))
+            item.set_image(Gtk.Image.new_from_icon_name('battery-{:03d}'.format(icon_level), Gtk.IconSize.MENU))
+            item.set_always_show_image(True)
             item.set_sensitive(False)
             self.menu.append(item)
 
