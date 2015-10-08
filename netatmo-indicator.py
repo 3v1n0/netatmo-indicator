@@ -178,9 +178,12 @@ class NetatmoIndicator(object):
         self.ind.set_label(str(label), "")
 
     def add_module_data_if_valid(self, module_data, max_age=3600):
-        module = Module.factory(module_data)
-        if module and module.age < max_age:
-             self.modules.append(module)
+        try:
+            module = Module.factory(module_data)
+            if module and module.age < max_age:
+                 self.modules.append(module)
+        except:
+            print(traceback.format_exc())
 
     def update_modules(self):
         self.modules = []
