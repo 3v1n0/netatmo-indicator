@@ -159,7 +159,9 @@ class RadioModule(WirelessModule):
 
 
 class ControlUnit(WifiModule):
-    pass
+    @property
+    def station_name(self):
+        return self['station_name']
 
 
 class Indoor(RadioModule):
