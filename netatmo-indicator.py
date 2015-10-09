@@ -25,7 +25,7 @@ from ConfigParser import ConfigParser, Error as ConfigParserError
 from datetime import datetime
 from gi.repository import AppIndicator3 as appindicator
 from gi.repository import Gtk, GLib
-from netatmo_modules import Module
+from netatmo_modules import Module, User
 from threading import Lock
 from xdg.BaseDirectory import xdg_config_home
 
@@ -34,6 +34,7 @@ import netatmo_api_python.lnetatmo as lnetatmo
 import os
 import signal
 import traceback
+import sys
 
 OWN_NAME = "netatmo-indicator"
 CLIENT_ID = "561467a749c75fa41c8b4569"
@@ -42,7 +43,22 @@ DEFAULT_UPDATE = 300
 
 UNITS = {'Temperature': '°', 'Humidity': '%', 'CO2': ' ppm', 'Pressure': ' mbar',
          'AbsolutePressure': ' mbar', 'Noise': ' db', 'Rain': ' mm',
-         'WindAngle': '°', 'WindStrength': 'km/h', 'GustAngle': '°', 'GustStrength': 'km/h' }
+         'WindAngle': '°', 'WindStrength': ' km/h','GustAngle': '°', 'GustStrength': ' km/h' }
+
+# See https://en.wikipedia.org/wiki/Beaufort_scale
+BEAUFORT_SCALE = [{'min': 0, 'max': 1.1, 'name': "calm"},
+                  {'min': 1.1, 'max': 5.5, 'name': "light air"},
+                  {'min': 5.5, 'max': 11.9, 'name': "light breeze"},
+                  {'min': 11.9, 'max': 19.7, 'name': "gentle breeze"},
+                  {'min': 19.7, 'max': 28.7, 'name': "breeze"},
+                  {'min': 28.7, 'max': 38.8, 'name': "fresh breeze"},
+                  {'min': 38.8, 'max': 49.9, 'name': "strong breeze"},
+                  {'min': 49.9, 'max': 61.8, 'name': "near gale"},
+                  {'min': 61.8, 'max': 74.6, 'name': "gale"},
+                  {'min': 74.6, 'max': 88.1, 'name': "strong gale"},
+                  {'min': 88.1, 'max': 102.4, 'name': "storm"},
+                  {'min': 102.4, 'max': 117.4, 'name': "violent storm"},
+                  {'min': 117.4, 'max': sys.maxint, 'name': "hurricane"}]
 
 # Workaround Ctrl+C not working with gio-gtk3
 signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -160,6 +176,7 @@ class NetatmoIndicator(object):
         self.config_auth = config_auth
         pwd = os.path.realpath(os.path.abspath(os.path.split(inspect.getfile(inspect.currentframe()))[0]))
         icon_path = os.path.join(pwd, '{}.png'.format(OWN_NAME))
+        self.units = UNITS
         self.ind = appindicator.Indicator.new(OWN_NAME, icon_path, appindicator.IndicatorCategory.APPLICATION_STATUS)
         self.ind.set_status(appindicator.IndicatorStatus.ACTIVE)
         self.update_indicator()
@@ -171,11 +188,9 @@ class NetatmoIndicator(object):
         except:
             print(traceback.format_exc())
 
+        self.update_user()
         self.update_label()
         self.populate_menu()
-
-    def set_label(self, label):
-        self.ind.set_label(str(label), "")
 
     def add_module_data_if_valid(self, module_data, max_age=3600):
         try:
@@ -193,6 +208,35 @@ class NetatmoIndicator(object):
             for m in station['modules']:
                 self.add_module_data_if_valid(devices.modules[m])
 
+    def update_user(self):
+        try:
+            self.user = User(lnetatmo.User(self.config_auth).rawData)
+
+            pressureunit = UNITS['Pressure']
+            windunit = UNITS['WindStrength']
+
+            if self.user.wind_unit == User.WindUnit.MPH:
+                windunit = ' mph'
+            elif self.user.wind_unit == User.WindUnit.MS:
+                windunit = ' ms'
+            elif self.user.wind_unit == User.WindUnit.BEAUFORT:
+                windunit = ''
+            elif self.user.wind_unit == User.WindUnit.KNOT:
+                windunit = ' knot'
+
+            if self.user.pressure_unit == User.PressureUnit.INHG:
+                pressureunit = ' inhg'
+            elif self.user.pressure_unit == User.PressureUnit.MMHG:
+                pressureunit = ' mmhg'
+
+            self.units['Pressure'] = pressureunit
+            self.units['AbsolutePressure'] = pressureunit
+            self.units['Rain'] = ' mm' if self.user.units == User.Units.SI else ' in'
+            self.units['WindStrength'] = windunit
+            self.units['GustStrength'] = windunit
+        except:
+            print(traceback.format_exc())
+
     def update_label(self):
         self.set_label('')
         try:
@@ -201,16 +245,54 @@ class NetatmoIndicator(object):
             for module in self.modules:
                 if module.id == self.config_auth.label_device:
                     sensor = self.config_auth.label_sensor
-                    unit = UNITS[sensor] if sensor in UNITS.keys() else ''
                     value = module.dashboard[sensor]
-                    self.set_label("{}{}".format(value, unit))
+                    self.set_label(self.get_value_unit_label(sensor, value))
         except:
             for module in self.modules:
                 if 'Temperature' in module.sensors:
-                    self.set_label("{}°".format(module.dashboard['Temperature']))
+                    value = module.dashboard['Temperature']
+                    self.set_label(self.get_value_unit_label(sensor, value))
 
                 if module.type == Module.Type.OUTDOOR:
                     break
+
+    def set_label(self, label):
+        self.ind.set_label(str(label), "")
+
+    def get_value_unit_label(self, sensor, value, fallback='—'):
+        unit = self.units[sensor] if sensor in self.units.keys() else ''
+        value = self.get_value_for_unit(sensor, value)
+        if not value or isinstance(value, str):
+            return "{}{}".format(value or fallback, unit)
+        return "{:1g}{}".format(float("{:.1f}".format(value)), unit)
+
+    def get_value_for_unit(self, sensor, value):
+        if not value:
+            return None
+        if sensor == 'Temperature':
+            if self.user.units == User.Units.IMPERIAL:
+                return (value * 1.8) + 32
+        if sensor == 'Rain':
+            if self.user.units == User.Units.IMPERIAL:
+                return value / 2.54
+        if sensor in ('WindStrength', 'GustStrength'):
+            if self.user.wind_unit == User.WindUnit.MPH:
+                return value / 1.609344
+            if self.user.wind_unit == User.WindUnit.MS:
+                return value / 3.6
+            if self.user.wind_unit == User.WindUnit.BEAUFORT:
+                for level in BEAUFORT_SCALE:
+                    if value >= level['min'] and value < level['max']:
+                        return level['name']
+            if self.user.wind_unit == User.WindUnit.KNOT:
+                return value / 1.852
+        if sensor == 'Pressure':
+            if self.user.pressure_unit == User.PressureUnit.INHG:
+                return value / 33.8639
+            if self.user.pressure_unit == User.PressureUnit.MMHG:
+                return value / 1.33322
+
+        return value
 
     def populate_menu(self):
         self.menu = Gtk.Menu()
@@ -237,8 +319,8 @@ class NetatmoIndicator(object):
         self.menu.append(it)
 
         for sensor, value in module.get_sensors_data().items():
-            unit = UNITS[sensor] if sensor in UNITS.keys() else ''
-            item = Gtk.MenuItem("  {}: {}{}".format(sensor, value or '…', unit)) #9 spaces to match icons
+            value_label = self.get_value_unit_label(sensor, value, fallback='…')
+            item = Gtk.MenuItem("  {}: {}".format(sensor, value_label))
             item.connect('activate', self.on_sensor_item_activated, module.id, sensor)
             self.menu.append(item)
 
