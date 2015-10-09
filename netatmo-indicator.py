@@ -238,7 +238,7 @@ class NetatmoIndicator(object):
 
         for sensor, value in module.get_sensors_data().items():
             unit = UNITS[sensor] if sensor in UNITS.keys() else ''
-            item = Gtk.MenuItem("  {}: {}{}".format(sensor, value, unit))
+            item = Gtk.MenuItem("  {}: {}{}".format(sensor, value or '…', unit)) #9 spaces to match icons
             item.connect('activate', self.on_sensor_item_activated, module.id, sensor)
             self.menu.append(item)
 
