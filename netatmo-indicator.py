@@ -244,7 +244,7 @@ class NetatmoIndicator(object):
 
         if self.config_auth.show_signal:
             item = Gtk.ImageMenuItem.new_with_label("Signal: ~{:.1f}%".format(module.signal_percent))
-            item.set_image(Gtk.Image.new_from_icon_name('nm-signal-{:d}'.format(module.signal_level * 25), Gtk.IconSize.MENU))
+            item.set_image(Gtk.Image.new_from_icon_name('nm-signal-{:d}'.format((module.signal_level+1) * 25), Gtk.IconSize.MENU))
             item.set_always_show_image(True)
             item.set_sensitive(False)
             self.menu.append(item)
