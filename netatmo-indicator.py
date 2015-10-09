@@ -231,10 +231,6 @@ class NetatmoIndicator(object):
             self.units['Rain'] = 'mm' if self.user.units == User.Units.SI else 'in'
             self.units['WindStrength'] = wind_unit
             self.units['GustStrength'] = wind_unit
-
-            for sensor, unit in self.units.items():
-                unit = self.units[sensor]
-                self.units[sensor] = (" {}").format(unit) if unit not in ['°', '%'] else unit
         except:
             print(traceback.format_exc())
 
@@ -262,6 +258,7 @@ class NetatmoIndicator(object):
 
     def get_value_unit_label(self, sensor, value, fallback='—'):
         unit = self.units[sensor] if sensor in self.units.keys() else ''
+        unit = " {}".format(unit) if len(unit) and unit not in ['°', '%'] else unit
         value = self.get_value_for_unit(sensor, value)
         if not value or isinstance(value, str):
             return "{}{}".format(value or fallback, unit)
