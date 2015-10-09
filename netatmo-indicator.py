@@ -41,9 +41,9 @@ CLIENT_ID = "561467a749c75fa41c8b4569"
 CLIENT_SECRET = "9I859KYeqXdrwYT38hBxGiIMqh"
 DEFAULT_UPDATE = 300
 
-UNITS = {'Temperature': '°', 'Humidity': '%', 'CO2': ' ppm', 'Pressure': ' mbar',
-         'AbsolutePressure': ' mbar', 'Noise': ' db', 'Rain': ' mm',
-         'WindAngle': '°', 'WindStrength': ' km/h','GustAngle': '°', 'GustStrength': ' km/h' }
+UNITS = {'Temperature': '°', 'Humidity': '%', 'CO2': 'ppm', 'Pressure': 'mbar',
+         'AbsolutePressure': ' mbar', 'Noise': 'db', 'Rain': 'mm',
+         'WindAngle': '°', 'WindStrength': 'km/h','GustAngle': '°', 'GustStrength': 'km/h' }
 
 # See https://en.wikipedia.org/wiki/Beaufort_scale
 BEAUFORT_SCALE = [{'min': 0, 'max': 1.1, 'name': "calm"},
@@ -140,9 +140,6 @@ class ConfigAuth(lnetatmo.ClientAuth, object):
                              Gtk.STOCK_OK, Gtk.ResponseType.OK))
 
         dialog.connect("delete-event", Gtk.main_quit)
-
-        label = Gtk.Label("This is a dialog to display additional information")
-
         box = Gtk.Box(spacing=10)
         dialog.get_content_area().add(box)
 
@@ -176,7 +173,6 @@ class NetatmoIndicator(object):
         self.config_auth = config_auth
         pwd = os.path.realpath(os.path.abspath(os.path.split(inspect.getfile(inspect.currentframe()))[0]))
         icon_path = os.path.join(pwd, '{}.png'.format(OWN_NAME))
-        self.units = UNITS
         self.ind = appindicator.Indicator.new(OWN_NAME, icon_path, appindicator.IndicatorCategory.APPLICATION_STATUS)
         self.ind.set_status(appindicator.IndicatorStatus.ACTIVE)
         self.update_indicator()
@@ -211,29 +207,34 @@ class NetatmoIndicator(object):
     def update_user(self):
         try:
             self.user = User(lnetatmo.User(self.config_auth).rawData)
+            self.units = UNITS.copy()
 
-            pressureunit = UNITS['Pressure']
-            windunit = UNITS['WindStrength']
+            pressure_unit = self.units['Pressure']
+            wind_unit = self.units['WindStrength']
 
             if self.user.wind_unit == User.WindUnit.MPH:
-                windunit = ' mph'
+                wind_unit = 'mph'
             elif self.user.wind_unit == User.WindUnit.MS:
-                windunit = ' ms'
+                wind_unit = 'ms'
             elif self.user.wind_unit == User.WindUnit.BEAUFORT:
-                windunit = ''
+                wind_unit = ''
             elif self.user.wind_unit == User.WindUnit.KNOT:
-                windunit = ' knot'
+                wind_unit = 'knot'
 
             if self.user.pressure_unit == User.PressureUnit.INHG:
-                pressureunit = ' inhg'
+                pressure_unit = 'inhg'
             elif self.user.pressure_unit == User.PressureUnit.MMHG:
-                pressureunit = ' mmhg'
+                pressure_unit = 'mmhg'
 
-            self.units['Pressure'] = pressureunit
-            self.units['AbsolutePressure'] = pressureunit
-            self.units['Rain'] = ' mm' if self.user.units == User.Units.SI else ' in'
-            self.units['WindStrength'] = windunit
-            self.units['GustStrength'] = windunit
+            self.units['Pressure'] = pressure_unit
+            self.units['AbsolutePressure'] = pressure_unit
+            self.units['Rain'] = 'mm' if self.user.units == User.Units.SI else 'in'
+            self.units['WindStrength'] = wind_unit
+            self.units['GustStrength'] = wind_unit
+
+            for sensor, unit in self.units.items():
+                unit = self.units[sensor]
+                self.units[sensor] = (" {}").format(unit) if unit not in ['°', '%'] else unit
         except:
             print(traceback.format_exc())
 
