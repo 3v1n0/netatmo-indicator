@@ -86,7 +86,7 @@ class Module(object):
         return False
 
     def get_sensors_data(self):
-        return { s: self.dashboard[s] for s in self.sensors }
+        return { s: self.dashboard[s] if s in self.dashboard.keys() else None for s in self.sensors }
 
 
 class WirelessModule(Module):
