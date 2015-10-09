@@ -21,8 +21,52 @@
 
 import time
 
-class Module(object):
+class BaseObject(object):
+    def __init__(self, data):
+        self.__data = data
 
+    def __getitem__(self, value):
+        return self.__data[value]
+
+    def __getattr__(self, name):
+        return self[name]
+
+
+class User(BaseObject):
+    class Units:
+        SI = 0
+        IMPERIAL = 1
+
+    class WindUnit:
+        KPH = 0
+        MPH = 1
+        MS = 2
+        BEAUFORT = 3
+        KNOT = 4
+
+    class PressureUnit:
+        MBAR = 0
+        INHG = 1
+        MMHG = 2
+
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def units(self):
+        return self.administrative['unit']
+
+    @property
+    def wind_unit(self):
+        return self.administrative['windunit']
+
+    @property
+    def pressure_unit(self):
+        return self.administrative['pressureunit']
+
+
+class Module(BaseObject):
     class Type:
         MAIN = "NAMain"
         OUTDOOR = "NAModule1"
@@ -44,15 +88,6 @@ class Module(object):
             return Indoor(data)
 
         raise Exception("No valid type for data found")
-
-    def __init__(self, data):
-        self.__data = data
-
-    def __getitem__(self, value):
-        return self.__data[value]
-
-    def __getattr__(self, name):
-        return self[name]
 
     @property
     def id(self):
